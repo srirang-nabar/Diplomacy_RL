@@ -1,0 +1,23 @@
+[project]
+name = "diplomacy-rl"
+version = "0.1.0"
+description = "Multi-agent RL on a symmetric 3-player no-press Diplomacy variant"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "gymnasium>=0.29",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.8",
+    "networkx>=3.2",
+    "numpy>=1.26",
+    "pandas>=3.0.3",
+    "pettingzoo>=1.24",
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.11",
+    "tensorboard>=2.16",
+    "torch>=2.2",
+    "tqdm>=4.66",
+    "trueskill>=0.4.5",
+]
