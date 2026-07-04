@@ -147,8 +147,10 @@ class TriadPolicy(nn.Module):
             ids[:, t] = torch.where(valid, a, torch.zeros_like(a))
             logprob = logprob + lp.gather(1, a.unsqueeze(1)).squeeze(1) * valid.to(lp.dtype)
             if exclude_emitted and t + 1 < T:
-                for b in torch.nonzero(valid).flatten().tolist():
-                    if int(a[b]) != repeat_ok:
-                        m[b, t + 1 :, a[b]] = False
+                rows = valid & (a != (repeat_ok if repeat_ok is not None else -1))
+                r = torch.nonzero(rows).flatten()
+                if len(r):
+                    later = torch.arange(t + 1, T, device=m.device)
+                    m[r.unsqueeze(1), later.unsqueeze(0), a[r].unsqueeze(1)] = False
             prev = torch.where(valid, a, prev)
         return ids, logprob, F.softmax(self.value_head(z), dim=-1)

@@ -212,9 +212,12 @@ def train_ppo(
             for s in range(0, n_samples - mb_size + 1, mb_size):
                 mb = order[s : s + mb_size]
                 o = f_obs[mb].to(dev)
-                m = f_mask[mb].to(dev)
-                i_ = f_ids[mb].to(dev)
                 n_ = f_nst[mb].to(dev)
+                # decode only to the minibatch's real max step count — exact,
+                # and ~2.5x cheaper than always unrolling MAX_UNITS steps
+                tmax = max(int(n_.max().item()), 1)
+                m = f_mask[mb, :tmax].to(dev)
+                i_ = f_ids[mb, :tmax].to(dev)
                 lp_steps, newlogp, entropy, vlogits = model.evaluate_actions(
                     o, i_, n_, masks=m, exclude_emitted=True, repeat_ok=WAIVE_ID
                 )
@@ -242,7 +245,7 @@ def train_ppo(
                             o, i_, n_, masks=m, exclude_emitted=True, repeat_ok=WAIVE_ID
                         )
                     valid = (
-                        torch.arange(MAX_UNITS, device=dev)[None, :] < n_[:, None]
+                        torch.arange(tmax, device=dev)[None, :] < n_[:, None]
                     ).float()
                     p_theta = lp_steps.exp()
                     kl_steps = (p_theta * (lp_steps - a_lp)).sum(-1)  # [B, T]
