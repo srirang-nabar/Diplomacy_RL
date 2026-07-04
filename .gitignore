@@ -11,5 +11,9 @@ wheels/
 
 data/
 
+# training outputs (release checkpoints live in weights/, which IS committed)
+runs/
+checkpoints/
+
 CLAUDE.md
 tasks.md
