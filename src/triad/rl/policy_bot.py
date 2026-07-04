@@ -16,7 +16,7 @@ from triad.engine.orders import (
     legal_movement_orders,
 )
 from triad.engine.state import Board
-from triad.env.obs import encode_observation
+from triad.env.obs import encode_observation, own_frame_unit_order
 from triad.rl.models import MAX_STEPS, TriadPolicy
 
 
@@ -63,7 +63,7 @@ class PolicyBot(Bot):
     def movement_orders(
         self, board: Board, power: str, rng: np.random.Generator
     ) -> dict[str, Order]:
-        provs = board.unit_provinces(power)
+        provs = own_frame_unit_order(board.units, power)  # seat-equivariant order
         step_ids = [legal_movement_orders(board.units, p) for p in provs]
         chosen = self._decode(board, power, step_ids, rng, exclude_emitted=False)
         return {ORDERS[i].src: ORDERS[i] for i in chosen}

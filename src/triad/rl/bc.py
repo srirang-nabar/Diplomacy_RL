@@ -27,7 +27,7 @@ from triad.bots import Grabber, RandomLegal, Turtle
 from triad.engine.game import Game
 from triad.engine.orders import ORDER_INDEX, WAIVE_ID
 from triad.engine.state import FALL, SPRING
-from triad.env.obs import encode_observation
+from triad.env.obs import encode_observation, own_frame_unit_order
 from triad.rl.checkpoint import resolve_device, save_checkpoint
 from triad.rl.models import MAX_STEPS, TriadPolicy
 from triad.rl.policy_bot import PolicyBot
@@ -86,7 +86,7 @@ def generate_dataset(
                 for pw in g.alive_powers():
                     om = bots[pw].movement_orders(g.board, pw, rng)
                     if pw in teachers:
-                        provs = g.board.unit_provinces(pw)
+                        provs = own_frame_unit_order(g.board.units, pw)
                         ids = np.full(MAX_STEPS, -1, dtype=np.int16)
                         for i, p in enumerate(provs):
                             ids[i] = ORDER_INDEX[om[p]]

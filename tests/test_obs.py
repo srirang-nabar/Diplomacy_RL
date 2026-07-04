@@ -74,3 +74,22 @@ def test_identical_position_identical_obs():
     b = Board.initial()
     o = [encode_observation(b, pw) for pw in POWERS]
     assert np.array_equal(o[0], o[1]) and np.array_equal(o[1], o[2])
+
+
+def test_unit_decode_order_is_seat_equivariant():
+    """Regression for the M3 seat-effect bug: the AR decode ORDER of a
+    power's units must map under rotation, not just the observation.
+    Real-frame canonical order violates this (B_BC < B_CA but their images
+    B_CA > B_AB flip); own-frame slot order is equivariant by construction.
+    Caught by the self-play chi^2 check (C > A > B across seeds), not by the
+    obs-equivariance test — order and content are separate properties."""
+    from triad.env.obs import own_frame_unit_order
+
+    rng = np.random.default_rng(3)
+    for _ in range(300):
+        b = _random_board(rng)
+        rb = _rotate_board(b)
+        for pw in POWERS:
+            order = own_frame_unit_order(b.units, pw)
+            r_order = own_frame_unit_order(rb.units, _next(pw))
+            assert r_order == [ROTATION[p] for p in order], (pw, order, r_order)

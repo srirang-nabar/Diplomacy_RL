@@ -51,11 +51,13 @@ def test_spaces():
 
 
 def test_movement_mask_matches_engine_legality():
+    from triad.env.obs import own_frame_unit_order
+
     env = TriadEnv()
     _, infos = env.reset()
     for pw in POWERS:
         mask = infos[pw]["action_mask"]
-        provs = env.game.board.unit_provinces(pw)
+        provs = own_frame_unit_order(env.game.board.units, pw)
         for i, p in enumerate(provs):
             legal = set(legal_movement_orders(env.game.board.units, p))
             assert set(np.flatnonzero(mask[i])) == legal

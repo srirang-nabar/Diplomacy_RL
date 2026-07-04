@@ -54,6 +54,24 @@ def _rho_k(p: str, k: int) -> str:
 #: k acts (slot i is canonical province PROVINCES[i] in the rotated frame).
 SLOT_REAL: list[list[str]] = [[_rho_k(p, k) for p in PROVINCES] for k in range(3)]
 
+#: SLOT_INDEX[k][p] = the own-frame slot index of real province p for power k
+#: (inverse of SLOT_REAL). Anything that must be seat-equivariant and ordered
+#: — above all the AR decode order of a power's units — must sort by THIS,
+#: not by the real-frame canonical index: the canonical order is NOT preserved
+#: by the rotation (e.g. B_BC < B_CA but rho maps them to B_CA > B_AB), which
+#: is precisely the seat-asymmetry bug the chi^2 check caught in M3.
+SLOT_INDEX: list[dict[str, int]] = [
+    {p: i for i, p in enumerate(SLOT_REAL[k])} for k in range(3)
+]
+
+
+def own_frame_unit_order(units: dict[str, str], power: str) -> list[str]:
+    """This power's unit provinces in own-frame canonical order — the one
+    decode order that is identical across seats for rotated positions."""
+    k = POWER_INDEX[power]
+    idx = SLOT_INDEX[k]
+    return sorted((p for p, pw in units.items() if pw == power), key=idx.__getitem__)
+
 # Static per-slot features: SC-ness and home-of-relative-power flags are
 # invariant under rotation, so they are the same for every seat.
 _IS_SC = np.array([1.0 if p in _SC_SET else 0.0 for p in PROVINCES], dtype=np.float32)

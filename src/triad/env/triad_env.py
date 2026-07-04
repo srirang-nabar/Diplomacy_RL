@@ -31,7 +31,7 @@ from triad.map_data import POWERS
 from triad.engine.game import Game
 from triad.engine.orders import ORDERS, VOCAB_SIZE, WAIVE_ID, legal_movement_orders
 from triad.engine.state import FALL, SPRING, WINTER
-from triad.env.obs import OBS_DIM, encode_observation
+from triad.env.obs import OBS_DIM, encode_observation, own_frame_unit_order
 
 MAX_UNITS = 12
 NOOP_ID = VOCAB_SIZE          # 336
@@ -66,7 +66,8 @@ class TriadEnv(ParallelEnv):
             mask[:, NOOP_ID] = True
             return mask
         if g.board.phase in (SPRING, FALL):
-            provs = g.board.unit_provinces(power)
+            # own-frame order: the only unit ordering that is seat-equivariant
+            provs = own_frame_unit_order(g.board.units, power)
             for i, p in enumerate(provs):
                 mask[i, legal_movement_orders(g.board.units, p)] = True
             for i in range(len(provs), MAX_UNITS):
@@ -119,7 +120,7 @@ class TriadEnv(ParallelEnv):
             merged: dict[str, dict[str, object]] = {}
             for pw in acting:
                 a = np.asarray(actions[pw]).ravel()
-                provs = g.board.unit_provinces(pw)
+                provs = own_frame_unit_order(g.board.units, pw)
                 om = {}
                 for i, p in enumerate(provs):
                     aid = int(a[i]) if i < len(a) else NOOP_ID
