@@ -1,5 +1,5 @@
 """Structural invariants of the Triad map. Any map edit must keep these green."""
-from map_data import (PROVINCES, ADJACENCY, SUPPLY_CENTERS, HOME_CENTERS,
+from triad.map_data import (PROVINCES, ADJACENCY, SUPPLY_CENTERS, HOME_CENTERS,
                             ROTATION, POWERS, VICTORY_CENTERS)
 
 
@@ -44,8 +44,10 @@ def test_counts_and_victory():
     assert len(SUPPLY_CENTERS) == 12
     assert VICTORY_CENTERS == 7  # strict majority
     degs = sorted(len(v) for v in ADJACENCY.values())
-    assert degs == [3] * 12 + [4] * 3 + [6]
-    assert sum(len(v) for v in ADJACENCY.values()) // 2 == 27
+    # 6 degree-3 (3 capitals + 3 border SCs), 9 degree-4 (6 flanks + 3 gates),
+    # CTR degree 6. Flanks border the opposing power's flank directly.
+    assert degs == [3] * 6 + [4] * 9 + [6]
+    assert sum(len(v) for v in ADJACENCY.values()) // 2 == 30
 
 
 def test_order_vocab_size():
@@ -55,5 +57,5 @@ def test_order_vocab_size():
     sup_hold = sum(degs.values())
     sup_move = sum((degs[d] - 1) for d in PROVINCES for _ in ADJACENCY[d])
     adjustment = 9 + 16 + 1
-    assert holds + moves + sup_hold + sup_move == 262
-    assert holds + moves + sup_hold + sup_move + adjustment == 288
+    assert holds + moves + sup_hold + sup_move == 310
+    assert holds + moves + sup_hold + sup_move + adjustment == 336
