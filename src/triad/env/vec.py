@@ -38,10 +38,15 @@ class VecTriadEnv:
 
     def step(
         self, actions: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[dict]]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[dict]]:
         """actions: int array [n_envs, 3, MAX_UNITS].
 
-        Returns (obs, mask, rewards [n_envs,3], done [n_envs], final_infos).
+        Returns (obs, mask, rewards [n_envs,3], done [n_envs], acted [n_envs,3],
+        seat_done [n_envs,3], final_infos).
+        acted:     seat was alive when this step's actions were taken (its
+                   reward/value belong in the rollout buffer).
+        seat_done: seat's episode ended on this step (elimination or game end)
+                   — the per-seat GAE bootstrap cut.
         Done envs are auto-reset; their obs/mask are the fresh episode's and
         final_infos[i] carries {"result": ..., "final_rewards": ...}.
         """
@@ -50,13 +55,18 @@ class VecTriadEnv:
         mask = np.zeros((self.n_envs, N_SEATS, MAX_UNITS, N_ACTIONS), dtype=bool)
         rewards = np.zeros((self.n_envs, N_SEATS), dtype=np.float32)
         done = np.zeros(self.n_envs, dtype=bool)
+        acted = np.zeros((self.n_envs, N_SEATS), dtype=bool)
+        seat_done = np.zeros((self.n_envs, N_SEATS), dtype=bool)
         final_infos: list[dict] = [{} for _ in range(self.n_envs)]
 
         for i, e in enumerate(self.envs):
-            acts = {pw: actions[i, s] for s, pw in enumerate(POWERS) if pw in e.agents}
+            acting = list(e.agents)
+            acts = {pw: actions[i, s] for s, pw in enumerate(POWERS) if pw in acting}
             o, r, term, trunc, inf = e.step(acts)
             for s, pw in enumerate(POWERS):
                 rewards[i, s] = r.get(pw, 0.0)
+                acted[i, s] = pw in acting
+                seat_done[i, s] = bool(term.get(pw, False))
             if not e.agents:  # episode over -> auto-reset
                 done[i] = True
                 final_infos[i] = {
@@ -65,4 +75,4 @@ class VecTriadEnv:
                 }
                 o, inf = e.reset()
             self._gather(i, o, inf, obs, mask)
-        return obs, mask, rewards, done, final_infos
+        return obs, mask, rewards, done, acted, seat_done, final_infos

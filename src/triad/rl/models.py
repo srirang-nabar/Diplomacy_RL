@@ -56,35 +56,64 @@ class TriadPolicy(nn.Module):
         return self.value_head(self.torso(obs))
 
     # --- teacher forcing (BC training / PPO evaluation) -----------------------
+    def effective_masks(
+        self,
+        masks: torch.Tensor,        # [B, T, vocab] bool (static per-step masks)
+        ids: torch.Tensor,          # [B, T] long — the ids actually emitted
+        n_steps: torch.Tensor,      # [B] long
+        repeat_ok: int | None = None,
+    ) -> torch.Tensor:
+        """Reconstruct the dynamic masks act() used with exclude_emitted=True:
+        an emitted id (except repeat_ok) is masked out of all later steps.
+        Deterministic given (masks, ids), so PPO can re-derive the exact
+        sampling distribution at update time. For movement phases this is a
+        no-op (two units can never share an order id — ids encode src)."""
+        B, T, V = masks.shape
+        eff = masks.clone()
+        later = torch.arange(T, device=masks.device)
+        for s in range(T - 1):
+            a = ids[:, s].clamp(min=0)
+            rows = (s < n_steps) & (a != (repeat_ok if repeat_ok is not None else -1))
+            r = torch.nonzero(rows).flatten()
+            if len(r):
+                eff[r.unsqueeze(1), later[s + 1 :].unsqueeze(0), a[r].unsqueeze(1)] = False
+        return eff
+
     def evaluate_actions(
         self,
         obs: torch.Tensor,          # [B, obs_dim]
         ids: torch.Tensor,          # [B, T] long, pad values ignored
         n_steps: torch.Tensor,      # [B] long
         masks: torch.Tensor | None = None,  # [B, T, vocab] bool; None = unmasked
+        exclude_emitted: bool = False,
+        repeat_ok: int | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Returns (step_logits [B,T,vocab], joint_logprob [B], entropy [B],
-        value_logits [B,3]). Log-prob/entropy are masked (when masks given)
-        and summed over valid steps only — identical recurrence to act()."""
+        """Returns (masked_step_logprobs [B,T,vocab], joint_logprob [B],
+        entropy [B], value_logits [B,3]). Log-prob/entropy are masked (when
+        masks given) and summed over valid steps only — identical recurrence
+        and masking to act(), so PPO ratios are exact."""
         B, T = ids.shape
+        if masks is not None and exclude_emitted:
+            masks = self.effective_masks(masks, ids, n_steps, repeat_ok)
         z, h = self._encode(obs)
         prev = torch.full((B,), START_TOKEN, dtype=torch.long, device=obs.device)
         safe_ids = ids.clamp(min=0)
-        logits_steps = []
+        lp_steps = []
         logprob = torch.zeros(B, device=obs.device)
         entropy = torch.zeros(B, device=obs.device)
         for t in range(T):
             h = self.cell(self.embed(prev), h)
             lg = self.order_head(h)
-            logits_steps.append(lg)
-            lg_masked = lg if masks is None else lg.masked_fill(~masks[:, t], -1e9)
-            lp = F.log_softmax(lg_masked, dim=-1)
+            if masks is not None:
+                lg = lg.masked_fill(~masks[:, t], -1e9)
+            lp = F.log_softmax(lg, dim=-1)
+            lp_steps.append(lp)
             valid = (t < n_steps).to(lp.dtype)
             logprob = logprob + lp.gather(1, safe_ids[:, t : t + 1]).squeeze(1) * valid
             p = lp.exp()
             entropy = entropy + (-(p * lp).sum(-1)) * valid
             prev = safe_ids[:, t]
-        return torch.stack(logits_steps, dim=1), logprob, entropy, self.value_head(z)
+        return torch.stack(lp_steps, dim=1), logprob, entropy, self.value_head(z)
 
     # --- sequential decoding (rollouts / eval) ----------------------------------
     @torch.no_grad()

@@ -43,3 +43,11 @@ def test_eval_bc_smoke():
     r = _run_smoke("eval_bc.py")
     assert r.returncode == 0, r.stderr
     assert "smoke OK" in r.stdout
+
+
+def test_train_ppo_smoke():
+    # the script that goes to cloud gets the strictest smoke: rollout, update,
+    # checkpoint save, resume, and final load all exercised (CLAUDE.md §7.2)
+    r = _run_smoke("train_ppo.py")
+    assert r.returncode == 0, r.stderr
+    assert "smoke OK" in r.stdout

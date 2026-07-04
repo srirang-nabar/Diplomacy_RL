@@ -1,0 +1,32 @@
+# TRIAD hyperparameters — single source for training runs (CLAUDE.md §4.4).
+# CLI flags on scripts/train_ppo.py override individual keys.
+
+seed: 0
+
+env:
+  n_envs: 64
+  shaping_alpha: 0.02        # +alpha * delta-SC at each Winter; 0 = ablation row
+
+ppo:
+  total_steps: 2000000       # standard budget — fixed by the first M3 run
+  rollout_len: 128
+  lr: 3.0e-4
+  anneal_lr: true
+  gamma: 1.0                 # finite episodes, terminal-heavy reward
+  gae_lambda: 0.95
+  clip_coef: 0.2
+  update_epochs: 4
+  n_minibatches: 8
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  beta_kl: 0.05              # KL(pi_theta || pi_BC); sweep {0, 0.01, 0.05, 0.2}
+
+anchor:
+  checkpoint: weights/bc.pt
+  init_from_anchor: true     # false + beta_kl 0 = the PPO-from-scratch ablation
+
+eval:
+  every_updates: 10
+  games: 45
+  opponent: grabber

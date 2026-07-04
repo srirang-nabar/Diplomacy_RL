@@ -172,12 +172,15 @@ def test_vec_env_shapes_autoreset_determinism():
                 for u in range(MAX_UNITS):
                     ids = np.flatnonzero(mask[i, s, u])
                     acts[i, s, u] = ids[rng.integers(len(ids))]
-        obs, mask, rew, done, infos = v.step(acts)
+        obs, mask, rew, done, acted, seat_done, infos = v.step(acts)
         assert rew.shape == (n, 3) and done.shape == (n,)
+        assert acted.shape == (n, 3) and seat_done.shape == (n, 3)
         for i in range(n):
             if done[i]:
                 dones_seen += 1
                 assert "result" in infos[i]
+                # all seats still alive at game end got their terminal flag
+                assert (seat_done[i] | ~acted[i]).all()
                 # auto-reset: fresh masks are valid (every live row nonempty)
                 assert mask[i].any(axis=-1).all()
     assert dones_seen >= 1, "no episode finished in 200 vec steps"
