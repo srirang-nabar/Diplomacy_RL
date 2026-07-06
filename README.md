@@ -29,7 +29,7 @@ The project's most transferable artefact is methodological: a cheap
 statistical symmetry test (identical policies in all seats ⇒ equal win
 rates) caught **two real equivariance bugs** — decode *order*, then action
 *frame* — that bitwise content tests could not see. The story is told in
-the notebooks and in [`report/interview_qa.md`](report/interview_qa.md).
+the analysis notebooks and in §5 of [`report/report.md`](report/report.md).
 
 ## Reproduce everything
 
