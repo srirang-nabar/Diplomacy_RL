@@ -51,16 +51,24 @@ def test_spaces():
 
 
 def test_movement_mask_matches_engine_legality():
-    from triad.env.obs import own_frame_unit_order
+    """Masks are OWN-FRAME (post the M4 action-frame fix): row i holds the
+    own-frame translation of the i-th own-frame-ordered unit's legal ids."""
+    from triad.engine.orders import to_own_frame_ids
+    from triad.env.obs import POWER_INDEX, own_frame_unit_order
 
     env = TriadEnv()
     _, infos = env.reset()
     for pw in POWERS:
+        k = POWER_INDEX[pw]
         mask = infos[pw]["action_mask"]
         provs = own_frame_unit_order(env.game.board.units, pw)
         for i, p in enumerate(provs):
-            legal = set(legal_movement_orders(env.game.board.units, p))
-            assert set(np.flatnonzero(mask[i])) == legal
+            legal = set(
+                to_own_frame_ids(
+                    legal_movement_orders(env.game.board.units, p), k
+                ).tolist()
+            )
+            assert set(np.flatnonzero(mask[i]).tolist()) == legal
         for i in range(len(provs), MAX_UNITS):
             assert set(np.flatnonzero(mask[i])) == {NOOP_ID}
 

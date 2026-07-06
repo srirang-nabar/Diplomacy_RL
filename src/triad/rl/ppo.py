@@ -57,6 +57,9 @@ class PPOConfig:
         self.max_grad_norm = 0.5
         self.beta_kl = 0.05                # KL(pi_theta || pi_BC) weight
         self.shaping_alpha = 0.02
+        self.population = False            # stage-3 opponent sampling (§4.4)
+        self.snapshot_every = 5            # updates between pool snapshots
+        self.p_latest = 0.8                # per-seat P(play live theta)
         self.eval_every = 10               # updates between quick bot evals
         self.eval_games = 45
         self.eval_opponent = "grabber"
@@ -117,6 +120,16 @@ def train_ppo(
     envs = VecTriadEnv(cfg.n_envs, shaping_alpha=cfg.shaping_alpha)
     obs_np, mask_np = envs.reset()
 
+    # population play: per-seat policy sources, resampled at episode boundaries
+    pool = None
+    seat_src = np.full((cfg.n_envs, N_SEATS), -1, dtype=np.int64)  # -1 = theta
+    if cfg.population:
+        from triad.rl.population import PolicyPool
+
+        pool = PolicyPool(outdir)
+        for i in range(cfg.n_envs):
+            seat_src[i] = pool.sample_seat_sources(N_SEATS, rng, cfg.p_latest)
+
     T, N = cfg.rollout_len, cfg.n_envs
     steps_per_update = T * N
     n_updates = cfg.total_steps // steps_per_update
@@ -132,6 +145,7 @@ def train_ppo(
     b_rew = torch.zeros(T, N, N_SEATS)
     b_acted = torch.zeros(T, N, N_SEATS, dtype=torch.bool)
     b_sdone = torch.zeros(T, N, N_SEATS, dtype=torch.bool)
+    b_theta = torch.ones(T, N, N_SEATS, dtype=torch.bool)  # seat played theta
 
     ep_returns: list[float] = []
     ep_solo = ep_draw = 0
@@ -148,19 +162,38 @@ def train_ppo(
             obs_t = torch.from_numpy(obs_np).reshape(B, OBS_DIM)
             m336 = torch.from_numpy(mask_np[..., :V]).reshape(B, MAX_UNITS, V)
             nst = m336.any(-1).sum(-1)  # live decode rows are always a prefix
+            src_flat = seat_src.reshape(B)
             with torch.no_grad():
-                ids, logp, vals = model.act(
-                    obs_t.to(dev), m336.to(dev), nst.to(dev),
-                    generator=gen if dev.type == "cpu" else None,
-                    exclude_emitted=True, repeat_ok=WAIVE_ID,
-                )
-            ids, logp, vals = ids.cpu(), logp.cpu(), vals.cpu()
+                if pool is None or (src_flat == -1).all():
+                    ids, logp, vals = model.act(
+                        obs_t.to(dev), m336.to(dev), nst.to(dev),
+                        generator=gen if dev.type == "cpu" else None,
+                        exclude_emitted=True, repeat_ok=WAIVE_ID,
+                    )
+                    ids, logp, vals = ids.cpu(), logp.cpu(), vals.cpu()
+                else:  # partition rows by policy source
+                    ids = torch.zeros(B, MAX_UNITS, dtype=torch.long)
+                    logp = torch.zeros(B)
+                    vals = torch.zeros(B, N_SEATS)
+                    for src in np.unique(src_flat):
+                        sel = torch.from_numpy(np.nonzero(src_flat == src)[0])
+                        pol = model if src == -1 else pool.get(int(src))
+                        o_s = obs_t[sel].to(dev if src == -1 else "cpu")
+                        i_s, lp_s, v_s = pol.act(
+                            o_s, m336[sel].to(o_s.device), nst[sel].to(o_s.device),
+                            generator=gen if o_s.device.type == "cpu" else None,
+                            exclude_emitted=True, repeat_ok=WAIVE_ID,
+                        )
+                        ids[sel] = i_s.cpu()
+                        logp[sel] = lp_s.cpu()
+                        vals[sel] = v_s.cpu()
             b_obs[t] = obs_t.view(N, N_SEATS, OBS_DIM)
             b_mask[t] = m336.view(N, N_SEATS, MAX_UNITS, V)
             b_ids[t] = ids.view(N, N_SEATS, MAX_UNITS)
             b_nst[t] = nst.view(N, N_SEATS)
             b_logp[t] = logp.view(N, N_SEATS)
             b_val[t] = vals[:, 0].view(N, N_SEATS)  # self component = baseline
+            b_theta[t] = torch.from_numpy(seat_src == -1)
 
             actions = ids.view(N, N_SEATS, MAX_UNITS).numpy()
             obs_np, mask_np, rew, done, acted, sdone, infos = envs.step(actions)
@@ -168,13 +201,15 @@ def train_ppo(
             b_acted[t] = torch.from_numpy(acted)
             b_sdone[t] = torch.from_numpy(sdone)
             global_step += N
-            for inf in infos:
+            for i, inf in enumerate(infos):
                 if inf:
                     ep_returns.append(sum(inf["final_rewards"].values()))
                     if inf["result"]["type"] == "solo":
                         ep_solo += 1
                     else:
                         ep_draw += 1
+                    if pool is not None:  # fresh episode -> resample sources
+                        seat_src[i] = pool.sample_seat_sources(N_SEATS, rng, cfg.p_latest)
 
         # ---- GAE(lambda), per seat, gamma = cfg.gamma ---------------------------
         with torch.no_grad():
@@ -190,8 +225,8 @@ def train_ppo(
             advantages[t] = lastgae
         returns = advantages + b_val
 
-        # ---- flatten valid samples ---------------------------------------------
-        flat = b_acted.reshape(-1)
+        # ---- flatten valid samples (theta-seats only under population play) -----
+        flat = (b_acted & b_theta).reshape(-1)
         idx = torch.nonzero(flat).flatten()
         f_obs = b_obs.reshape(-1, OBS_DIM)[idx]
         f_mask = b_mask.reshape(-1, MAX_UNITS, V)[idx]
@@ -309,6 +344,10 @@ def train_ppo(
             print(f"  eval vs 2x{cfg.eval_opponent} (sampled, {cfg.eval_games}g): "
                   f"solo {st['solo_rate']:.2f}", flush=True)
             model.train()
+
+        # ---- population snapshot ---------------------------------------------------------
+        if pool is not None and (update + 1) % cfg.snapshot_every == 0:
+            pool.add(model, update + 1, seed=cfg.seed)
 
         # ---- checkpointing (resumable; trainstate never shipped) ------------------------
         if (update + 1) % checkpoint_every == 0 or update == n_updates - 1:

@@ -29,9 +29,15 @@ from pettingzoo import ParallelEnv
 
 from triad.map_data import POWERS
 from triad.engine.game import Game
-from triad.engine.orders import ORDERS, VOCAB_SIZE, WAIVE_ID, legal_movement_orders
+from triad.engine.orders import (
+    VOCAB_SIZE,
+    WAIVE_ID,
+    legal_movement_orders,
+    to_own_frame_ids,
+    to_real_order,
+)
 from triad.engine.state import FALL, SPRING, WINTER
-from triad.env.obs import OBS_DIM, encode_observation, own_frame_unit_order
+from triad.env.obs import OBS_DIM, POWER_INDEX, encode_observation, own_frame_unit_order
 
 MAX_UNITS = 12
 NOOP_ID = VOCAB_SIZE          # 336
@@ -65,23 +71,26 @@ class TriadEnv(ParallelEnv):
         if g.over or power in g.eliminated:
             mask[:, NOOP_ID] = True
             return mask
+        k = POWER_INDEX[power]
         if g.board.phase in (SPRING, FALL):
-            # own-frame order: the only unit ordering that is seat-equivariant
+            # own-frame unit order + own-frame order ids: both are required
+            # for seat equivariance (identical positions -> identical masks)
             provs = own_frame_unit_order(g.board.units, power)
             for i, p in enumerate(provs):
-                mask[i, legal_movement_orders(g.board.units, p)] = True
+                real = legal_movement_orders(g.board.units, p)
+                mask[i, to_own_frame_ids(real, k)] = True
             for i in range(len(provs), MAX_UNITS):
                 mask[i, NOOP_ID] = True
         else:  # WINTER
             delta = g.winter_delta(power)
             if delta > 0:
-                ids = g.legal_build_ids(power)
+                ids = to_own_frame_ids(g.legal_build_ids(power), k)
                 for i in range(delta):
                     mask[i, ids] = True
-                    mask[i, WAIVE_ID] = True
+                    mask[i, WAIVE_ID] = True  # WAIVE is a rotation fixed point
                 live = delta
             elif delta < 0:
-                ids = g.legal_disband_ids(power)
+                ids = to_own_frame_ids(g.legal_disband_ids(power), k)
                 for i in range(-delta):
                     mask[i, ids] = True
                 live = -delta
@@ -120,12 +129,13 @@ class TriadEnv(ParallelEnv):
             merged: dict[str, dict[str, object]] = {}
             for pw in acting:
                 a = np.asarray(actions[pw]).ravel()
+                k = POWER_INDEX[pw]
                 provs = own_frame_unit_order(g.board.units, pw)
                 om = {}
                 for i, p in enumerate(provs):
                     aid = int(a[i]) if i < len(a) else NOOP_ID
                     if 0 <= aid < VOCAB_SIZE:
-                        om[p] = ORDERS[aid]
+                        om[p] = to_real_order(aid, k)  # own-frame -> real
                     # NOOP / out-of-range -> no order -> engine coerces to HOLD
                 merged[pw] = om
             g.step_movement(merged)
@@ -134,10 +144,11 @@ class TriadEnv(ParallelEnv):
             ob: dict[str, list[object]] = {}
             for pw in acting:
                 a = np.asarray(actions[pw]).ravel()
+                k = POWER_INDEX[pw]
                 delta = g.winter_delta(pw)
                 live = abs(delta)
                 ob[pw] = [
-                    ORDERS[int(a[i])]
+                    to_real_order(int(a[i]), k)
                     for i in range(min(live, len(a)))
                     if 0 <= int(a[i]) < VOCAB_SIZE
                 ]

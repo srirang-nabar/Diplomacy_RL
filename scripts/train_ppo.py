@@ -69,6 +69,7 @@ def main() -> None:
         return
 
     y = load_cfg(args.config)
+    pop = y.get("population", {})
     cfg = PPOConfig(
         seed=y.get("seed", 0),
         n_envs=y["env"]["n_envs"],
@@ -76,6 +77,9 @@ def main() -> None:
         eval_every=y["eval"]["every_updates"],
         eval_games=y["eval"]["games"],
         eval_opponent=y["eval"]["opponent"],
+        population=pop.get("enabled", False),
+        snapshot_every=pop.get("snapshot_every", 5),
+        p_latest=pop.get("p_latest", 0.8),
         **{k: v for k, v in y["ppo"].items()},
     )
     if args.total_steps is not None:

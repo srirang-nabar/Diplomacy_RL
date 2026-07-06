@@ -25,6 +25,11 @@ ppo:
   max_grad_norm: 0.5
   beta_kl: 0.05              # KL(pi_theta || pi_BC); sweep {0, 0.01, 0.05, 0.2}
 
+population:                  # stage 3 (M4+): opponent sampling from a snapshot pool
+  enabled: true
+  snapshot_every: 5          # updates between pool snapshots
+  p_latest: 0.8              # per-seat P(play live theta) vs uniform-past
+
 anchor:
   checkpoint: weights/bc.pt
   init_from_anchor: true     # false + beta_kl 0 = the PPO-from-scratch ablation

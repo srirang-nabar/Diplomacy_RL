@@ -171,3 +171,48 @@ def rotate_order(o: Order) -> Order:
 
 def rotate_orders(orders: Iterable[Order]) -> list[Order]:
     return [rotate_order(o) for o in orders]
+
+
+# --- own-frame action interface (the vocab permutation) -----------------------
+# The policy operates ENTIRELY in the acting power's own frame: observations
+# are rotated (env/obs.py) and so must the ACTION space be — otherwise the
+# same relational decision has a different order id per seat, the legality
+# masks become seat-dependent for identical observations, and exact weight
+# sharing is silently broken (the second equivariance bug, caught in M4 by
+# the seat chi^2 + a trajectory-equivariance experiment).
+#
+#   VOCAB_PERM[k][own_id]  = real order id   (apply rho^k to the own-frame order)
+#   VOCAB_PERM_INV[k][real_id] = own_id
+#
+# k is the acting power's index; k=0 is the identity. WAIVE is a fixed point.
+def _build_vocab_perms() -> list[list[int]]:
+    perms = []
+    for k in range(3):
+        perm = []
+        for o in ORDERS:
+            r = o
+            for _ in range(k):
+                r = rotate_order(r)
+            perm.append(ORDER_INDEX[r])
+        perms.append(perm)
+    return perms
+
+
+import numpy as _np  # noqa: E402
+
+VOCAB_PERM: list[_np.ndarray] = [_np.array(p, dtype=_np.int64) for p in _build_vocab_perms()]
+VOCAB_PERM_INV: list[_np.ndarray] = []
+for _perm in VOCAB_PERM:
+    _inv = _np.empty_like(_perm)
+    _inv[_perm] = _np.arange(len(_perm))
+    VOCAB_PERM_INV.append(_inv)
+
+
+def to_own_frame_ids(real_ids: list[int] | _np.ndarray, power_index: int) -> _np.ndarray:
+    """Real-frame order ids -> own-frame ids for the acting power."""
+    return VOCAB_PERM_INV[power_index][_np.asarray(real_ids, dtype=_np.int64)]
+
+
+def to_real_order(own_id: int, power_index: int) -> Order:
+    """Own-frame order id -> the real Order to submit to the engine."""
+    return ORDERS[int(VOCAB_PERM[power_index][own_id])]

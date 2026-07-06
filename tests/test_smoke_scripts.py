@@ -51,3 +51,19 @@ def test_train_ppo_smoke():
     r = _run_smoke("train_ppo.py")
     assert r.returncode == 0, r.stderr
     assert "smoke OK" in r.stdout
+
+
+def test_run_m4_grid_smoke():
+    # micro-grid: 2 rows end-to-end incl. population, evals, chi2, registry
+    r = subprocess.run(
+        [sys.executable, str(SCRIPTS / "run_m4_grid.py"), "--smoke"],
+        capture_output=True, text=True, timeout=300, cwd=REPO,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "smoke OK" in r.stdout
+    reg = REPO / "results" / "m4_registry_smoke.json"
+    assert reg.exists()
+    reg.unlink()  # smoke artifacts don't accumulate
+    md = REPO / "results" / "m4_registry_smoke.md"
+    if md.exists():
+        md.unlink()

@@ -72,3 +72,40 @@ def test_one_update_integration(tmp_path):
         assert torch.isfinite(p).all()
     assert (tmp_path / "ppo_latest.pt").exists()
     assert (tmp_path / "ppo_latest_trainstate.pt").exists()
+
+
+def test_population_pool_sampling_and_snapshots(tmp_path):
+    import numpy as np
+    from triad.rl.population import LATEST, PolicyPool
+
+    pool = PolicyPool(tmp_path)
+    rng = np.random.default_rng(0)
+    # empty pool -> always latest
+    assert (pool.sample_seat_sources(3, rng) == LATEST).all()
+    m = TriadPolicy()
+    pool.add(m, 5, seed=0)
+    pool.add(m, 10, seed=0)
+    assert len(pool) == 2 and (tmp_path / "pool" / "snap_0005.pt").exists()
+    # with p_latest=0: every seat draws from the pool
+    src = pool.sample_seat_sources(3, rng, p_latest=0.0)
+    assert set(src.tolist()) <= {0, 1}
+    # cached load returns a working policy
+    assert pool.get(0).config == m.config
+
+
+def test_population_training_integration(tmp_path):
+    """Population run end-to-end: snapshots appear, training stays finite,
+    and theta-masking leaves a valid (non-empty) training batch."""
+    cfg = PPOConfig(
+        n_envs=2, rollout_len=8, total_steps=48, update_epochs=1,
+        n_minibatches=1, eval_every=0, seed=0,
+        population=True, snapshot_every=1, p_latest=0.5,
+    )
+    model = train_ppo(
+        cfg, anchor_path="weights/bc.pt", init_from_anchor=True,
+        device="cpu", output_dir=tmp_path, log=False, checkpoint_every=10,
+    )
+    for p in model.parameters():
+        assert torch.isfinite(p).all()
+    assert (tmp_path / "pool").is_dir()
+    assert len(list((tmp_path / "pool").glob("snap_*.pt"))) >= 2

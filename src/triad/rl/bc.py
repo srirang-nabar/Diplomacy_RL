@@ -25,7 +25,8 @@ import torch.nn.functional as F
 from triad.map_data import POWERS
 from triad.bots import Grabber, RandomLegal, Turtle
 from triad.engine.game import Game
-from triad.engine.orders import ORDER_INDEX, WAIVE_ID
+from triad.engine.orders import ORDER_INDEX, WAIVE_ID, to_own_frame_ids
+from triad.env.obs import POWER_INDEX
 from triad.engine.state import FALL, SPRING
 from triad.env.obs import encode_observation, own_frame_unit_order
 from triad.rl.checkpoint import resolve_device, save_checkpoint
@@ -86,10 +87,12 @@ def generate_dataset(
                 for pw in g.alive_powers():
                     om = bots[pw].movement_orders(g.board, pw, rng)
                     if pw in teachers:
+                        k = POWER_INDEX[pw]
                         provs = own_frame_unit_order(g.board.units, pw)
                         ids = np.full(MAX_STEPS, -1, dtype=np.int16)
                         for i, p in enumerate(provs):
-                            ids[i] = ORDER_INDEX[om[p]]
+                            # targets in OWN-frame ids (the policy's frame)
+                            ids[i] = to_own_frame_ids([ORDER_INDEX[om[p]]], k)[0]
                         if provs:
                             obs_l.append(
                                 np.round(
@@ -108,11 +111,14 @@ def generate_dataset(
                     wo = bots[pw].winter_orders(g.board, pw, rng)
                     delta = g.winter_delta(pw)
                     if pw in teachers and delta != 0:
+                        k = POWER_INDEX[pw]
                         n = abs(delta)
                         ids = np.full(MAX_STEPS, -1, dtype=np.int16)
                         for i in range(n):  # unfilled build slots -> WAIVE
                             ids[i] = (
-                                ORDER_INDEX[wo[i]] if i < len(wo) else WAIVE_ID
+                                to_own_frame_ids([ORDER_INDEX[wo[i]]], k)[0]
+                                if i < len(wo)
+                                else WAIVE_ID
                             )
                         obs_l.append(
                             np.round(
