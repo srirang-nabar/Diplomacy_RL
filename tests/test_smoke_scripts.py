@@ -71,6 +71,12 @@ def test_run_bop_metrics_smoke():
     assert "smoke OK" in r.stdout
 
 
+def test_make_report_figs_smoke():
+    r = _run_smoke("make_report_figs.py")
+    assert r.returncode == 0, r.stderr
+    assert "smoke OK" in r.stdout
+
+
 def test_run_m4_grid_smoke():
     # micro-grid: 2 rows end-to-end incl. population, evals, chi2, registry
     r = subprocess.run(
