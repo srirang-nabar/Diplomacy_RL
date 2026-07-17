@@ -1,4 +1,6 @@
-# TRIAD-RL
+# Multi-Agent Strategy Emergence (Reinforcement Learning)
+
+*a.k.a. TRIAD-RL*
 
 Multi-agent reinforcement learning on **Triad** — a custom, rotationally
 symmetric 3-player no-press Diplomacy variant — asking one question:
