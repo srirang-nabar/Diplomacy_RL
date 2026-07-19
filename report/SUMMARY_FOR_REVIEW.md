@@ -13,7 +13,7 @@ metrics over a 10,800-game tournament.
 | -------- | ------ |
 | Does balance-of-power emerge? | **No — the agents learn the opposite**: prey-selection (chance-corrected leader-targeting excess −0.10 vs −0.06 scripted baseline), snowballing (lead-conversion 0.84 vs 0.50), cross-power supports ≈ 0. Mechanism: stopping the leader is a public good between trailers — free-riding wins without communication |
 | Does the DipNet bootstrap result reproduce at small scale? | **Yes** — PPO-from-scratch fails at equal budget (2.8%/13.6% vs 2×Grabber) while BC+PPO reaches **92.4%**; final agent 54.3% aggregate in round-robin |
-| Methodological headline | A cheap **seat-symmetry χ² test** (identical policies ⇒ equal seat win-rates) caught **two real equivariance bugs** (p≈1e-8) — root-caused, regression-tested, everything retrained |
+| Methodological headline | A cheap **χ² symmetry test** (identical policies ⇒ equal seat win-rates) caught **two bugs invisible to accuracy metrics** (p≈1e-8) — root-caused, guarded by permanent tests, everything retrained |
 
 **How to review quickly (~5 min):**
 
