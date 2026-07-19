@@ -17,6 +17,8 @@ metrics over a 10,800-game tournament.
 
 **How to review quickly (~5 min):**
 
+**Fastest path: `notebooks/00_review_walkthrough.ipynb`** — a single commented, pre-executed notebook backing every resume point, with the asserts inline.
+
 1. Read the headline table in `README.md`, then open `notebooks/m5_results.ipynb` (tournament,
    attack-the-leader and lead-conversion analyses, commented) — `report/report.md` has the full
    write-up and figures.
