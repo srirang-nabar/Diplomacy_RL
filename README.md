@@ -1,4 +1,4 @@
-# Multi-Agent Strategy Emergence (Reinforcement Learning)
+# Strategy Emergence in Diplomacy (Multi-Agent RL)
 
 *a.k.a. TRIAD-RL*
 

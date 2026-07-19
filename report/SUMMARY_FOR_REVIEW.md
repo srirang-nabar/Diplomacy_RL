@@ -1,4 +1,4 @@
-# Reviewer summary — Multi-Agent Strategy Emergence (Reinforcement Learning)
+# Reviewer summary — Strategy Emergence in Diplomacy (Multi-Agent RL)
 
 **One paragraph.** In a symmetric 3-player game with simultaneous moves and no communication, does
 *balance-of-power* behavior (trailing players ganging up on the leader) emerge from self-play RL?
